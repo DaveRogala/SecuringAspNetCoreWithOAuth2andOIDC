@@ -1,10 +1,15 @@
 ﻿using ImageGallery.Client.ViewModels;
 using ImageGallery.Model;
-using Microsoft.AspNetCore.Mvc; 
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using System.Text;
 using System.Text.Json;
 
 namespace ImageGallery.Client.Controllers;
 
+[Authorize]
 public class GalleryController(IHttpClientFactory httpClientFactory,
     ILogger<GalleryController> logger) : Controller
 {
@@ -14,6 +19,7 @@ public class GalleryController(IHttpClientFactory httpClientFactory,
 
     public async Task<IActionResult> Index()
     {
+        await LogIdentityInformation();
         var httpClient = _httpClientFactory.CreateClient("APIClient");
 
         var request = new HttpRequestMessage(
@@ -109,7 +115,7 @@ public class GalleryController(IHttpClientFactory httpClientFactory,
 
         return RedirectToAction("Index");
     }
-
+    [Authorize(Roles = "PayingUser")]
     public IActionResult AddImage()
     {
         return View();
@@ -117,6 +123,7 @@ public class GalleryController(IHttpClientFactory httpClientFactory,
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Roles = "PayingUser")]
     public async Task<IActionResult> AddImage(AddImageViewModel addImageViewModel)
     {
         if (!ModelState.IsValid)
@@ -162,5 +169,18 @@ public class GalleryController(IHttpClientFactory httpClientFactory,
         response.EnsureSuccessStatusCode();
 
         return RedirectToAction("Index");
+    }
+    public async Task LogIdentityInformation()
+    {
+        var identityToken = await HttpContext.GetTokenAsync(OpenIdConnectParameterNames.IdToken);
+
+        var userClaimsStringBuilder = new StringBuilder();
+        foreach (var claim in User.Claims)
+        {
+            userClaimsStringBuilder.AppendLine(
+                $"Claim typ[e: {claim.Type} - Claim value: {claim.Value}");
+        }
+
+        _logger.LogInformation($"\n{identityToken} \n{userClaimsStringBuilder}");
     }
 }
